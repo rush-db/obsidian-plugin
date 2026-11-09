@@ -16,6 +16,8 @@ export interface NoteInput {
   text: string
   metadata: NoteMetadata | null
   maxBodyChars: number
+  /** Indexed notes this note links to (see `outgoingLinks`). */
+  links: string[]
 }
 
 type Scalar = string | number | boolean
@@ -91,6 +93,11 @@ export const toNoteRecord = (input: NoteInput, hash: string): NoteRecord => {
   const aliases = collectAliases(metadata)
   if (aliases.length) record.aliases = aliases
 
+  // RushDB joins `linksTo` to the targets' `linkKey` to create the LINKS_TO relationships.
+  // Both carry the vault id, so the join can never connect notes of different vaults.
+  record.linkKey = linkKey(input.vaultId, input.path)
+  if (input.links.length) record.linksTo = input.links.map((p) => linkKey(input.vaultId, p))
+
   const headings = (metadata?.headings ?? []).map((h) => h.heading.trim()).filter(Boolean)
   if (headings.length) record.headings = headings
 
@@ -104,9 +111,17 @@ export const toNoteRecord = (input: NoteInput, hash: string): NoteRecord => {
   return record
 }
 
+/** A note's key for links: unique across vaults sharing a project. */
+export const linkKey = (vaultId: string, path: string) => `${vaultId}:${path}`
+
+/** Bumped when the record format changes, so every note is re-sent once in the new format. */
+const RECORD_FORMAT = 2
+
 /** SHA-256 of what is sent for the note, so an unchanged note is never re-sent. */
 export const hashNote = async (input: NoteInput): Promise<string> => {
-  const data = new TextEncoder().encode(`${input.maxBodyChars}\u0000${input.text}`)
+  const data = new TextEncoder().encode(
+    `${RECORD_FORMAT}\u0000${input.maxBodyChars}\u0000${input.links.join('\u0001')}\u0000${input.text}`
+  )
   const digest = await crypto.subtle.digest('SHA-256', data)
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('')
 }
@@ -120,12 +135,3 @@ export const outgoingLinks = (
   Object.keys(resolvedLinks[path] ?? {})
     .filter((target) => target !== path && target.endsWith('.md') && isIndexed(target))
     .sort()
-
-export const diffLinks = (previous: string[], next: string[]) => {
-  const before = new Set(previous)
-  const after = new Set(next)
-  return {
-    added: next.filter((p) => !before.has(p)),
-    removed: previous.filter((p) => !after.has(p))
-  }
-}

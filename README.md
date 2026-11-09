@@ -41,7 +41,7 @@ Add the RushDB MCP server to your agent with the same API key:
 }
 ```
 
-The agent then sees your notes as `NOTE` records with `path`, `title`, `folder`, `tags`, `headings`, `body`, `modifiedAt` and your properties (prefixed `fm_`, e.g. `status` → `fm_status`), joined by `LINKS_TO` relationships. Try: *"Which notes tagged `project` link to notes that are still `fm_status: draft`?"*
+The agent then sees your notes as `NOTE` records with `path`, `title`, `folder`, `tags`, `headings`, `body`, `modifiedAt`, `linkKey` (`<vault id>:<path>`), `linksTo` (the `linkKey`s of the indexed notes it links to) and your properties (prefixed `fm_`, e.g. `status` → `fm_status`), joined by `LINKS_TO` relationships (with `kind: "wikilink"`). Try: *"Which notes tagged `project` link to notes that are still `fm_status: draft`?"*
 
 ## What is sent, and where
 

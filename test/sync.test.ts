@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { NoteRecord } from '../src/parse'
 import { DEFAULT_SETTINGS, type RushDBSettings, type SyncState } from '../src/settings'
-import { SyncEngine, type Store, type VaultSource } from '../src/sync'
+import { BATCH_NOTES, SyncEngine, toBatches, type Store, type VaultSource } from '../src/sync'
 
 /** An in-memory RushDB: notes by id and LINKS_TO edges as `source>target`. */
 class FakeStore implements Store {
@@ -11,32 +11,59 @@ class FakeStore implements Store {
   calls: string[] = []
   private seq = 0
 
-  async upsertNote(record: NoteRecord) {
-    this.calls.push(`upsert ${String(record.path)}`)
-    const existing = [...this.notes].find(([, r]) => r.vaultId === record.vaultId && r.path === record.path)
-    const id = existing?.[0] ?? `n${++this.seq}`
-    this.notes.set(id, record)
-    return id
+  batches: number[] = []
+  private idByKey = new Map<string, string>()
+
+  async upsertNotes(records: NoteRecord[]) {
+    this.batches.push(records.length)
+    const ids: Record<string, string> = {}
+    for (const record of records) {
+      this.calls.push(`upsert ${String(record.path)}`)
+      const key = `${String(record.vaultId)}/${String(record.path)}`
+      const id = this.idByKey.get(key) ?? `n${++this.seq}`
+      this.idByKey.set(key, id)
+      this.notes.set(id, record)
+      ids[String(record.path)] = id
+    }
+    return ids
   }
   async updateNote(id: string, data: Partial<NoteRecord>) {
     this.calls.push(`update ${id}`)
-    this.notes.set(id, { ...this.notes.get(id)!, ...data } as NoteRecord)
+    const before = this.notes.get(id)!
+    const after = { ...before, ...data } as NoteRecord
+    this.idByKey.delete(`${String(before.vaultId)}/${String(before.path)}`)
+    this.idByKey.set(`${String(after.vaultId)}/${String(after.path)}`, id)
+    this.notes.set(id, after)
   }
   async deleteNotes(ids: string[]) {
     for (const id of ids) {
       this.calls.push(`delete ${id}`)
+      const record = this.notes.get(id)
+      if (record) this.idByKey.delete(`${String(record.vaultId)}/${String(record.path)}`)
       this.notes.delete(id)
       for (const e of this.edges) if (e.startsWith(`${id}>`) || e.endsWith(`>${id}`)) this.edges.delete(e)
     }
   }
-  async link(source: string, targets: string[]) {
-    for (const t of targets) this.edges.add(`${source}>${t}`)
+  linkRequests: number[] = []
+  unlinkRequests: number[] = []
+
+  /** Like the engine's key join: each source's `linksTo` against `linkKey`, within the vault; existing edges kept. */
+  async linkNotes(paths: string[]) {
+    this.linkRequests.push(paths.length)
+    for (const [sourceId, source] of this.notes) {
+      if (source.vaultId !== 'v1' || !paths.includes(String(source.path))) continue
+      const targets = Array.isArray(source.linksTo) ? source.linksTo : []
+      for (const [targetId, target] of this.notes) {
+        if (target.vaultId === 'v1' && targets.includes(target.linkKey as string)) this.edges.add(`${sourceId}>${targetId}`)
+      }
+    }
   }
-  async unlink(source: string, targets: string[]) {
-    for (const t of targets) this.edges.delete(`${source}>${t}`)
-  }
-  async linkedFrom(source: string) {
-    return [...this.edges].filter((e) => e.startsWith(`${source}>`)).map((e) => e.split('>')[1])
+  async unlinkNotes(paths: string[]) {
+    this.unlinkRequests.push(paths.length)
+    for (const [sourceId, source] of this.notes) {
+      if (!paths.includes(String(source.path))) continue
+      for (const e of this.edges) if (e.startsWith(`${sourceId}>`)) this.edges.delete(e)
+    }
   }
   async listNotes(vaultId: string) {
     return [...this.notes]
@@ -70,11 +97,12 @@ class FakeVault implements VaultSource {
     return null
   }
   resolvedLinks() {
+    const byName = new Map([...this.files.keys()].map((p) => [p.replace(/^.*\//, ''), p]))
     const links: Record<string, Record<string, number>> = {}
     for (const [path, text] of this.files) {
       links[path] = {}
       for (const [, name] of text.matchAll(/\[\[([^\]]+)\]\]/g)) {
-        const target = [...this.files.keys()].find((p) => p.replace(/^.*\//, '') === `${name}.md`)
+        const target = byName.get(`${name}.md`)
         if (target) links[path][target] = 1
       }
     }
@@ -162,6 +190,20 @@ describe('SyncEngine', () => {
     expect([...store.notes.values()].map((r) => r.path)).toEqual(['notes/b.md'])
     expect(store.links()).toEqual([])
     expect(state.notes['notes/b.md'].links).toEqual([])
+    // The note that linked to it was resent without it.
+    expect([...store.notes.values()].find((r) => r.path === 'notes/b.md')).not.toHaveProperty('linksTo')
+  })
+
+  it('links again when a deleted note comes back', async () => {
+    await sync.reconcile()
+    const text = vault.files.get('a.md')!
+    vault.files.delete('a.md')
+    sync.enqueueDelete('a.md')
+    await sync.flush()
+    vault.files.set('a.md', text)
+    sync.enqueue('a.md')
+    await sync.flush()
+    expect(store.links()).toEqual(['a.md>notes/b.md', 'notes/b.md>a.md'])
   })
 
   it('catches up with changes made while it was off and drops excluded notes', async () => {
@@ -183,4 +225,45 @@ describe('SyncEngine', () => {
     expect(store.links()).toEqual(['a.md>notes/b.md', 'notes/b.md>a.md'])
     expect(store.calls.filter((c) => c.startsWith('upsert'))).toEqual([])
   })
+
+  it('sends a large vault in batches and saves progress per batch', async () => {
+    vault.files.clear()
+    for (let i = 0; i < 1050; i++) vault.files.set(`n${i}.md`, `note ${i} [[n${(i + 1) % 1050}]]`)
+    let saves = 0
+    const progress: string[] = []
+    const big = new SyncEngine(vault, store, () => settings, state, async () => void saves++, (p) => {
+      if (p) progress.push(p.phase)
+    })
+    await big.reconcile()
+    expect(store.notes.size).toBe(1050)
+    expect(Math.max(...store.batches)).toBeLessThanOrEqual(BATCH_NOTES)
+    expect(store.batches.length).toBe(11)
+    expect(saves).toBeGreaterThanOrEqual(11)
+    expect(store.edges.size).toBe(1050)
+    // One link request per 500 source notes, nothing to clear on a first sync.
+    expect(store.linkRequests).toEqual([500, 500, 50])
+    expect(store.unlinkRequests).toEqual([])
+    expect(progress).toContain('notes')
+    expect(progress).toContain('links')
+
+    store.batches = []
+    store.linkRequests = []
+    await big.reconcile()
+    expect(store.batches).toEqual([])
+    expect(store.linkRequests).toEqual([])
+  })
 })
+
+describe('toBatches', () => {
+  const note = (body: string) => ({ vaultId: 'v', path: 'p.md', body })
+
+  it('splits by count', () => {
+    expect(toBatches(Array.from({ length: 5 }, () => note('x')), 2).map((b) => b.length)).toEqual([2, 2, 1])
+  })
+
+  it('splits by size, keeping an oversized note on its own', () => {
+    const sizes = toBatches([note('a'.repeat(60)), note('b'.repeat(60)), note('c'.repeat(500)), note('d')], 100, 200)
+    expect(sizes.map((b) => b.length)).toEqual([2, 1, 1])
+  })
+})
+

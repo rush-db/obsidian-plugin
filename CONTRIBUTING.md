@@ -15,9 +15,19 @@ The release workflow creates the version PR. Merging it tags the new version
 (no `v` prefix, as Obsidian requires) and publishes a GitHub release with
 `main.js`, `manifest.json` and `styles.css`.
 
-`test/engine.test.ts` runs sync and the sidebar queries against a real engine
-and is skipped unless you point it at one. Each run uses its own tenant and
-deletes its notes afterwards:
+`test/integration.test.ts` runs sync and the sidebar queries, plus a 1,200-note
+vault, against a real server. It is skipped unless you configure one, in the
+environment or in a git-ignored `.env.test`. Each run writes under its own
+vault id and deletes its notes afterwards; it leaves the `NOTE` text index (and
+embedding index) in place, so use a test project.
+
+```bash
+# .env.test, against RushDB Cloud (or set RUSHDB_API_URL for a self-hosted platform)
+RUSHDB_API_KEY=<a test project's API key>
+RUSHDB_EMBEDDINGS=1   # optional: also test semantic search
+```
+
+Or against a standalone engine:
 
 ```bash
 docker run -d --rm --name plugin-test-engine -p 127.0.0.1:3997:3997 rushdb/rushdb:3.0.6 \

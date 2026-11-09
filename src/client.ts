@@ -6,6 +6,8 @@ import type { RushDBSettings } from './settings'
 import type { Store } from './sync'
 
 const PAGE = 500
+/** Set on every LINKS_TO relationship the plugin writes. */
+export const LINK_PROPERTIES = { kind: 'wikilink' }
 const DELETE_CHUNK = 1000
 
 /** A note as the views show it. */
@@ -27,6 +29,18 @@ export interface RelatedNotes {
 }
 
 type Where = Record<string, unknown>
+
+interface NoteSummary {
+  id: string
+  path: string
+  contentHash?: string
+}
+
+/** A selected `__id` comes back as 32 hex digits; record ids elsewhere are dashed UUIDs. */
+export const toRecordId = (raw: string) =>
+  /^[0-9a-f]{32}$/i.test(raw) ?
+    `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`
+  : raw
 
 interface RecordLike {
   id: string
@@ -75,13 +89,15 @@ export class RushDBVault implements Store {
 
   // Sync
 
-  async upsertNote(record: NoteRecord) {
-    const result = await this.db.records.upsert({
+  async upsertNotes(records: NoteRecord[]) {
+    const result = await this.db.records.createMany({
       label: NOTE_LABEL,
-      data: record,
-      options: { mergeBy: ['vaultId', 'path'], mergeStrategy: 'rewrite', suggestTypes: true }
+      data: records,
+      options: { mergeBy: ['vaultId', 'path'], mergeStrategy: 'rewrite', suggestTypes: true, returnResult: true }
     })
-    return result.id
+    const ids: Record<string, string> = {}
+    for (const r of result.data) ids[str(r.data.path)] = r.id
+    return ids
   }
 
   async updateNote(id: string, data: Partial<NoteRecord>) {
@@ -94,26 +110,32 @@ export class RushDBVault implements Store {
     }
   }
 
-  async link(sourceId: string, targetIds: string[]) {
-    if (!targetIds.length) return
-    await this.db.records.attach({
-      source: sourceId,
-      target: targetIds,
-      options: { type: LINK_TYPE, direction: 'out' }
+  async linkNotes(paths: string[]) {
+    if (!paths.length) return
+    await this.db.relationships.createMany({
+      source: { label: NOTE_LABEL, key: 'linksTo', where: { vaultId: this.vaultId, path: { $in: paths } } },
+      target: { label: NOTE_LABEL, key: 'linkKey', where: { vaultId: this.vaultId } },
+      type: LINK_TYPE,
+      direction: 'out',
+      // Edge properties also keep the platform from saving this call as a reusable join pattern.
+      properties: LINK_PROPERTIES
     })
   }
 
-  async unlink(sourceId: string, targetIds: string[]) {
-    if (!targetIds.length) return
-    await this.db.records.detach({
-      source: sourceId,
-      target: targetIds,
-      options: { typeOrTypes: LINK_TYPE, direction: 'out' }
+  async unlinkNotes(paths: string[]) {
+    if (!paths.length) return
+    await this.db.relationships.deleteMany({
+      source: { label: NOTE_LABEL, where: { vaultId: this.vaultId, path: { $in: paths } } },
+      target: { label: NOTE_LABEL, where: { vaultId: this.vaultId } },
+      type: LINK_TYPE,
+      direction: 'out',
+      manyToMany: true
     })
   }
 
+  /** Ids of the notes `sourceId` links to. */
   async linkedFrom(sourceId: string) {
-    const notes = await this.findAll({
+    const notes = await this.listWhere({
       vaultId: this.vaultId,
       [NOTE_LABEL]: { $relation: { type: LINK_TYPE, direction: 'in' }, $id: sourceId }
     })
@@ -121,12 +143,7 @@ export class RushDBVault implements Store {
   }
 
   async listNotes(vaultId: string) {
-    const notes = await this.findAll({ vaultId })
-    return notes.map((n) => ({
-      id: n.id,
-      path: str(n.data.path),
-      contentHash: typeof n.data.contentHash === 'string' ? n.data.contentHash : undefined
-    }))
+    return this.listWhere({ vaultId })
   }
 
   /** Removes every note of this vault, with its links. */
@@ -222,11 +239,24 @@ export class RushDBVault implements Store {
     return (result.data as RecordLike[]).map(toHit)
   }
 
-  private async findAll(where: Where): Promise<RecordLike[]> {
-    const all: RecordLike[] = []
+  /**
+   * Id, path and content hash of the matching notes, page by page. Selects just
+   * those fields, so listing a large vault does not download every note's text.
+   */
+  private async listWhere(where: Where): Promise<NoteSummary[]> {
+    const all: NoteSummary[] = []
     for (let skip = 0; ; skip += PAGE) {
-      const page = await this.db.records.find({ labels: [NOTE_LABEL], where, limit: PAGE, skip } as never)
-      all.push(...(page.data as RecordLike[]))
+      const page = await this.db.records.find({
+        labels: [NOTE_LABEL],
+        where,
+        select: { path: '$record.path', contentHash: '$record.contentHash', recordId: '$record.__id' },
+        limit: PAGE,
+        skip
+      } as never)
+      for (const { data } of page.data as Array<{ data: Record<string, unknown> }>) {
+        const contentHash = str(data.contentHash)
+        all.push({ id: toRecordId(str(data.recordId)), path: str(data.path), ...(contentHash && { contentHash }) })
+      }
       if (page.data.length < PAGE) return all
     }
   }

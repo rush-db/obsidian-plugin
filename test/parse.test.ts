@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   collectTags,
-  diffLinks,
   frontmatterKey,
   hashNote,
   outgoingLinks,
@@ -10,6 +9,7 @@ import {
   toNoteRecord,
   type NoteInput
 } from '../src/parse'
+import { toRecordId } from '../src/client'
 import { isIncluded } from '../src/settings'
 
 const input = (overrides: Partial<NoteInput> = {}): NoteInput => ({
@@ -24,6 +24,7 @@ const input = (overrides: Partial<NoteInput> = {}): NoteInput => ({
     tags: [{ tag: '#db' }]
   },
   maxBodyChars: 1000,
+  links: [],
   ...overrides
 })
 
@@ -36,6 +37,7 @@ describe('toNoteRecord', () => {
       folder: 'projects',
       modifiedAt: '2026-11-01T00:00:00.000Z',
       contentHash: 'h',
+      linkKey: 'v1:projects/RushDB.md',
       body: '# RushDB\nGraph notes #db',
       tags: ['db'],
       headings: ['RushDB'],
@@ -88,8 +90,10 @@ describe('helpers', () => {
     expect(outgoingLinks('a.md', links, (p) => !p.startsWith('private/'))).toEqual(['b.md'])
   })
 
-  it('diffs links', () => {
-    expect(diffLinks(['a', 'b'], ['b', 'c'])).toEqual({ added: ['c'], removed: ['a'] })
+  it('records links as linksTo and hashes them', async () => {
+    expect(toNoteRecord(input({ links: ['b.md'] }), 'h').linksTo).toEqual(['v1:b.md'])
+    expect(toNoteRecord(input(), 'h')).not.toHaveProperty('linksTo')
+    expect(await hashNote(input({ links: ['b.md'] }))).not.toBe(await hashNote(input()))
   })
 
   it('selects folders', () => {
@@ -101,4 +105,10 @@ describe('helpers', () => {
     expect(isIncluded('work/a.md', { includeFolders: ['work'], excludeFolders: [] })).toBe(true)
     expect(isIncluded('workshop/a.md', { includeFolders: ['work'], excludeFolders: [] })).toBe(false)
   })
+
+  it('formats selected record ids as UUIDs', () => {
+    expect(toRecordId('01a1c1619e1677f289682923b9227bf0')).toBe('01a1c161-9e16-77f2-8968-2923b9227bf0')
+    expect(toRecordId('01a1c161-9e16-77f2-8968-2923b9227bf0')).toBe('01a1c161-9e16-77f2-8968-2923b9227bf0')
+  })
 })
+

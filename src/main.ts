@@ -118,7 +118,10 @@ export default class RushDBPlugin extends Plugin {
       () => this.settings,
       this.state,
       () => this.savePluginData(),
-      (progress) => this.setStatus(progress ? `syncing ${progress.done}/${progress.total}` : null)
+      (progress) =>
+        this.setStatus(
+          progress ? `${progress.phase === 'notes' ? 'syncing notes' : 'linking'} ${progress.done}/${progress.total}` : null
+        )
     )
     this.refreshRelatedViews()
     if (!this.settings.includeFolders.length) return this.setStatus('no folders chosen')
