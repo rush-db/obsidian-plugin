@@ -2,7 +2,7 @@
   "name": "rushdb-obsidian-plugin",
   "description": "Index an Obsidian vault into RushDB: notes, properties, tags and links, searchable by you and by AI agents.",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "license": "Apache-2.0",
   "type": "module",
   "packageManager": "pnpm@10.1.0",
