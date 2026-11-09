@@ -2,7 +2,7 @@
   "id": "rushdb",
   "name": "RushDB",
   "version": "0.2.1",
-  "minAppVersion": "1.5.0",
+  "minAppVersion": "1.13.0",
   "description": "Index your vault into RushDB: notes, properties, tags and links become a searchable graph for you and for AI agents.",
   "author": "RushDB",
   "authorUrl": "https://rushdb.com",

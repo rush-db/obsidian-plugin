@@ -31,17 +31,17 @@ const settingsFor = (): RushDBSettings => ({
     {
       mode: 'api',
       apiUrl: env.RUSHDB_API_URL || DEFAULT_SETTINGS.apiUrl,
-      apiKey: env.RUSHDB_API_KEY ?? '',
       embeddings: env.RUSHDB_EMBEDDINGS === '1'
     }
   : {
       mode: 'engine',
       engineUrl: env.RUSHDB_ENGINE_URL ?? '',
-      engineToken: env.RUSHDB_ENGINE_TOKEN ?? '',
       engineScope: `obsidian-plugin-test-${runId}`
     }),
   includeFolders: ['/']
 })
+
+const credentials = { apiKey: env.RUSHDB_API_KEY ?? '', engineToken: env.RUSHDB_ENGINE_TOKEN ?? '' }
 
 const fetchTransport: Transport = async ({ url, method, headers, body }) => {
   // Node test transport; the plugin itself uses Obsidian's requestUrl.
@@ -87,7 +87,7 @@ const eventually = async <T>(fn: () => Promise<T>, ok: (value: T) => boolean, ti
 const setup = (vaultId: string, files: Files) => {
   const settings = settingsFor()
   const state: SyncState = { vaultId, notes: {} }
-  const vault = new RushDBVault(createDb(settings, fetchTransport), vaultId, settings)
+  const vault = new RushDBVault(createDb(settings, credentials, fetchTransport), vaultId, settings)
   const sync = new SyncEngine(vaultSourceOf(files), vault, () => settings, state, async () => {})
   return { settings, state, vault, sync }
 }
@@ -153,7 +153,7 @@ describe.skipIf(!target)(`against RushDB (${target ?? 'skipped'})`, () => {
     // Vector-only, with a query sharing no word with any note, so a keyword match
     // or the default order cannot pass it. Managed embeddings are computed shortly
     // after each write (the index reads `pending` until then), so wait for them.
-    const db = createDb(t.settings, fetchTransport)
+    const db = createDb(t.settings, credentials, fetchTransport)
     const query = 'similarity lookup over embeddings'
     const result = await eventually(
       () => db.records.vectorSearch({ labels: ['NOTE'], propertyName: 'body', query, where: { vaultId: t.state.vaultId }, limit: 5 }),
@@ -210,7 +210,7 @@ describe.skipIf(!target)(`a large vault against RushDB (${target ?? 'skipped'})`
     if (target === 'api') {
       // Link writes must not be saved as an approved join pattern the platform
       // re-applies. (Its suggestion analysis may still propose one; that needs approval.)
-      const { data } = await createDb(t.settings, fetchTransport).relationships.patterns.list()
+      const { data } = await createDb(t.settings, credentials, fetchTransport).relationships.patterns.list()
       const saved = (data?.patterns ?? []).filter((p) => p.status === 'approved' && p.source.key === 'linksTo')
       expect(saved).toEqual([])
     }
@@ -244,7 +244,7 @@ describe.skipIf(!target)(`two vaults in one project against RushDB (${target ?? 
     await first.sync.reconcile()
     await second.sync.reconcile()
     // Every note `a.md` links to, in any vault: only its own vault's `b.md`.
-    const db = createDb(first.settings, fetchTransport)
+    const db = createDb(first.settings, credentials, fetchTransport)
     const linked = async (sourceId: string) => {
       const result = await db.records.find({
         labels: ['NOTE'],

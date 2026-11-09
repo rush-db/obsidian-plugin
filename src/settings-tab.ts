@@ -1,7 +1,12 @@
-import { App, Notice, PluginSettingTab, Setting } from 'obsidian'
+import { App, Notice, PluginSettingTab, type SettingDefinitionItem } from 'obsidian'
 
 import type RushDBPlugin from './main'
-import { parseFolderList, type ConnectionMode } from './settings'
+import { parseFolderList, type RushDBSettings } from './settings'
+
+type Key = keyof RushDBSettings
+
+/** Folder lists are edited as one folder per line. */
+const FOLDER_LISTS = new Set<Key>(['includeFolders', 'excludeFolders'])
 
 export class RushDBSettingTab extends PluginSettingTab {
   constructor(
@@ -11,183 +16,162 @@ export class RushDBSettingTab extends PluginSettingTab {
     super(app, plugin)
   }
 
-  display() {
-    const { containerEl } = this
+  getSettingDefinitions(): SettingDefinitionItem<Key>[] {
     const settings = this.plugin.settings
-    const save = () => this.plugin.saveSettings()
-    containerEl.empty()
+    const isApi = () => settings.mode === 'api'
 
-    containerEl.createEl('p', {
-      cls: 'setting-item-description',
-      text: 'Notes in the folders you choose are sent to the RushDB server configured below. Nothing is sent until you choose at least one folder.'
-    })
-
-    new Setting(containerEl).setName('Connection').setHeading()
-
-    new Setting(containerEl)
-      .setName('Server')
-      .setDesc('RushDB Cloud or a self-hosted platform use an API key. A standalone engine is reached directly.')
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOption('api', 'RushDB API (Cloud or self-hosted)')
-          .addOption('engine', 'Standalone engine')
-          .setValue(settings.mode)
-          .onChange(async (value) => {
-            settings.mode = value as ConnectionMode
-            await save()
-            this.display()
-          })
-      )
-
-    if (settings.mode === 'api') {
-      new Setting(containerEl)
-        .setName('API URL')
-        .setDesc('https://api.rushdb.com for RushDB Cloud, or your own platform URL.')
-        .addText((text) =>
-          text.setValue(settings.apiUrl).onChange(async (value) => {
-            settings.apiUrl = value.trim()
-            await save()
-          })
-        )
-      new Setting(containerEl)
-        .setName('API key')
-        .setDesc('A project API key. It is stored in this vault’s plugin data.')
-        .addText((text) => {
-          text.inputEl.type = 'password'
-          text.setValue(settings.apiKey).onChange(async (value) => {
-            settings.apiKey = value.trim()
-            await save()
-          })
-        })
-    } else {
-      new Setting(containerEl)
-        .setName('Engine URL')
-        .setDesc('Where `rushdb serve` listens, for example http://127.0.0.1:3999.')
-        .addText((text) =>
-          text.setValue(settings.engineUrl).onChange(async (value) => {
-            settings.engineUrl = value.trim()
-            await save()
-          })
-        )
-      new Setting(containerEl)
-        .setName('Engine token')
-        .setDesc('Leave empty if the engine runs without a token.')
-        .addText((text) => {
-          text.inputEl.type = 'password'
-          text.setValue(settings.engineToken).onChange(async (value) => {
-            settings.engineToken = value.trim()
-            await save()
-          })
-        })
-      new Setting(containerEl)
-        .setName('Tenant')
-        .setDesc('For an engine started with --multitenant; leave empty otherwise.')
-        .addText((text) =>
-          text.setValue(settings.engineScope).onChange(async (value) => {
-            settings.engineScope = value.trim()
-            await save()
-          })
-        )
-    }
-
-    new Setting(containerEl)
-      .setName('Check connection')
-      .addButton((button) =>
-        button.setButtonText('Check').onClick(async () => {
-          button.setDisabled(true)
-          try {
-            const count = await this.plugin.checkConnection()
-            new Notice(`Connected to RushDB. ${count} notes of this vault are indexed.`)
-          } catch (error) {
-            new Notice(`Could not connect: ${error instanceof Error ? error.message : String(error)}`)
-          } finally {
-            button.setDisabled(false)
-          }
-        })
-      )
-
-    new Setting(containerEl).setName('Index').setHeading()
-
-    new Setting(containerEl)
-      .setName('Folders to index')
-      .setDesc('One per line. Use / for the whole vault. Changes apply when you close this tab.')
-      .addTextArea((text) => {
-        text.inputEl.rows = 4
-        text.setPlaceholder('/').setValue(settings.includeFolders.join('\n')).onChange(async (value) => {
-          settings.includeFolders = parseFolderList(value)
-          await save()
-        })
-      })
-
-    new Setting(containerEl)
-      .setName('Folders to skip')
-      .setDesc('One per line, inside the indexed folders: journals, private notes, templates.')
-      .addTextArea((text) => {
-        text.inputEl.rows = 3
-        text.setValue(settings.excludeFolders.join('\n')).onChange(async (value) => {
-          settings.excludeFolders = parseFolderList(value)
-          await save()
-        })
-      })
-
-    new Setting(containerEl)
-      .setName('Semantic search')
-      .setDesc(
-        'Embed note text with the server’s managed embedding model for similarity search. Needs RushDB Cloud or a platform with an embedding model; a standalone engine uses keyword search only.'
-      )
-      .addToggle((toggle) =>
-        toggle
-          .setValue(settings.embeddings)
-          .setDisabled(settings.mode === 'engine')
-          .onChange(async (value) => {
-            settings.embeddings = value
-            await save()
-          })
-      )
-
-    new Setting(containerEl)
-      .setName('Text per note')
-      .setDesc('Characters of each note sent for search. Longer notes are cut.')
-      .addText((text) => {
-        text.inputEl.type = 'number'
-        text.setValue(String(settings.maxBodyChars)).onChange(async (value) => {
-          const n = Number.parseInt(value, 10)
-          if (Number.isFinite(n) && n > 0) {
-            settings.maxBodyChars = n
-            await save()
-          }
-        })
-      })
-
-    new Setting(containerEl).setName('Maintenance').setHeading()
-
-    new Setting(containerEl)
-      .setName('Resync')
-      .setDesc('Compare the vault with RushDB and send whatever differs.')
-      .addButton((button) => button.setButtonText('Resync').onClick(() => void this.plugin.resync()))
-
-    new Setting(containerEl)
-      .setName('Remove this vault from RushDB')
-      .setDesc('Deletes every note and link this vault sent. Your notes are not touched.')
-      .addButton((button) =>
-        button
-          .setButtonText('Remove')
-          .setWarning()
-          .onClick(async () => {
-            button.setDisabled(true)
-            try {
-              const count = await this.plugin.purge()
-              new Notice(`Removed ${count} notes from RushDB.`)
-            } catch (error) {
-              new Notice(`Could not remove: ${error instanceof Error ? error.message : String(error)}`)
-            } finally {
-              button.setDisabled(false)
+    return [
+      {
+        type: 'group',
+        heading: 'Connection',
+        items: [
+          {
+            name: 'Server',
+            desc: 'RushDB Cloud or a self-hosted platform use an API key. A standalone engine is reached directly.',
+            control: {
+              type: 'dropdown',
+              key: 'mode',
+              options: { api: 'RushDB API (Cloud or self-hosted)', engine: 'Standalone engine' }
             }
-          })
-      )
+          },
+          {
+            name: 'API URL',
+            desc: 'https://api.rushdb.com for RushDB Cloud, or your own platform URL.',
+            visible: isApi,
+            control: { type: 'text', key: 'apiUrl', placeholder: 'https://api.rushdb.com' }
+          },
+          {
+            name: 'API key',
+            desc: 'A project API key, kept in Obsidian’s secret storage.',
+            visible: isApi,
+            control: { type: 'secret', key: 'apiKeySecret' }
+          },
+          {
+            name: 'Engine URL',
+            desc: 'Where `rushdb serve` listens, for example http://127.0.0.1:3999.',
+            visible: () => !isApi(),
+            control: { type: 'text', key: 'engineUrl', placeholder: 'http://127.0.0.1:3999' }
+          },
+          {
+            name: 'Engine token',
+            desc: 'Leave empty if the engine runs without a token.',
+            visible: () => !isApi(),
+            control: { type: 'secret', key: 'engineTokenSecret' }
+          },
+          {
+            name: 'Tenant',
+            desc: 'For an engine started with --multitenant; leave empty otherwise.',
+            visible: () => !isApi(),
+            control: { type: 'text', key: 'engineScope' }
+          },
+          {
+            name: 'Check connection',
+            render: (setting) => {
+              setting.addButton((button) =>
+                button.setButtonText('Check').onClick(async () => {
+                  button.setDisabled(true)
+                  try {
+                    const count = await this.plugin.checkConnection()
+                    new Notice(`Connected to RushDB. ${count} notes of this vault are indexed.`)
+                  } catch (error) {
+                    new Notice(`Could not connect: ${error instanceof Error ? error.message : String(error)}`)
+                  } finally {
+                    button.setDisabled(false)
+                  }
+                })
+              )
+            }
+          }
+        ]
+      },
+      {
+        type: 'group',
+        heading: 'Index',
+        items: [
+          {
+            name: 'Folders to index',
+            desc: 'One per line; / for the whole vault. Notes are sent to the server above only from these folders, and nothing is sent until you choose one. Changes apply when you close the settings.',
+            aliases: ['privacy', 'include'],
+            control: { type: 'textarea', key: 'includeFolders', placeholder: '/', rows: 4 }
+          },
+          {
+            name: 'Folders to skip',
+            desc: 'One per line, inside the indexed folders: journals, private notes, templates.',
+            aliases: ['exclude', 'ignore'],
+            control: { type: 'textarea', key: 'excludeFolders', rows: 3 }
+          },
+          {
+            name: 'Semantic search',
+            desc: 'Embed note text with the server’s managed embedding model for similarity search. Needs RushDB Cloud or a platform with an embedding model; a standalone engine uses keyword search only.',
+            aliases: ['embeddings', 'vector'],
+            control: { type: 'toggle', key: 'embeddings', disabled: () => !isApi() }
+          },
+          {
+            name: 'Text per note',
+            desc: 'Characters of each note sent for search. Longer notes are cut.',
+            control: {
+              type: 'number',
+              key: 'maxBodyChars',
+              min: 1,
+              validate: (value) => (Number.isInteger(value) && value > 0 ? undefined : 'Enter a whole number above 0.')
+            }
+          }
+        ]
+      },
+      {
+        type: 'group',
+        heading: 'Maintenance',
+        items: [
+          {
+            name: 'Resync',
+            desc: 'Compare the vault with RushDB and send whatever differs.',
+            render: (setting) => {
+              setting.addButton((button) => button.setButtonText('Resync').onClick(() => void this.plugin.resync()))
+            }
+          },
+          {
+            name: 'Remove this vault from RushDB',
+            desc: 'Deletes every note and link this vault sent. Your notes are not touched.',
+            render: (setting) => {
+              setting.addButton((button) =>
+                button
+                  .setButtonText('Remove')
+                  .setDestructive()
+                  .onClick(async () => {
+                    button.setDisabled(true)
+                    try {
+                      const count = await this.plugin.purge()
+                      new Notice(`Removed ${count} notes from RushDB.`)
+                    } catch (error) {
+                      new Notice(`Could not remove: ${error instanceof Error ? error.message : String(error)}`)
+                    } finally {
+                      button.setDisabled(false)
+                    }
+                  })
+              )
+            }
+          }
+        ]
+      }
+    ]
+  }
+
+  getControlValue(key: string): unknown {
+    const value = this.plugin.settings[key as Key]
+    return FOLDER_LISTS.has(key as Key) && Array.isArray(value) ? value.join('\n') : value
+  }
+
+  /** Writes into the settings and saves them with the sync state, which share plugin data. */
+  async setControlValue(key: string, value: unknown) {
+    const settings = this.plugin.settings as unknown as Record<string, unknown>
+    settings[key] = FOLDER_LISTS.has(key as Key) ? parseFolderList(String(value)) : value
+    await this.plugin.saveSettings()
+    // The server choice decides which connection rows show.
+    if (key === 'mode') this.refreshDomState()
   }
 
   hide() {
+    super.hide()
     void this.plugin.onSettingsClosed()
   }
 }

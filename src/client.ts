@@ -2,7 +2,7 @@ import RushDB from '@rushdb/javascript-sdk'
 
 import { createHttpClient, type Transport } from './http'
 import { LINK_TYPE, NOTE_LABEL, type NoteRecord } from './parse'
-import type { RushDBSettings } from './settings'
+import type { Credentials, RushDBSettings } from './settings'
 import type { Store } from './sync'
 
 const PAGE = 500
@@ -62,17 +62,17 @@ const toHit = (r: RecordLike): NoteHit => {
   }
 }
 
-export const createDb = (settings: RushDBSettings, transport?: Transport) => {
+export const createDb = (settings: RushDBSettings, credentials: Credentials, transport?: Transport) => {
   const httpClient = createHttpClient(transport)
   if (settings.mode === 'engine') {
-    return new RushDB(settings.engineToken, {
+    return new RushDB(credentials.engineToken, {
       direct: true,
       engineUrl: settings.engineUrl,
       ...(settings.engineScope && { scope: settings.engineScope }),
       httpClient
     })
   }
-  return new RushDB(settings.apiKey, { url: settings.apiUrl, httpClient })
+  return new RushDB(credentials.apiKey, { url: settings.apiUrl, httpClient })
 }
 
 type Db = ReturnType<typeof createDb>

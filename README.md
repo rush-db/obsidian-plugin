@@ -11,9 +11,9 @@ Your Markdown files stay the source of truth. The plugin only ever writes to Rus
 
 ## Setup
 
-1. Install **RushDB** from **Settings → Community plugins → Browse**, then enable it.
+1. Install **RushDB** from **Settings → Community plugins → Browse**, then enable it. It needs Obsidian 1.13 or later.
 2. Choose where your notes go, in **Settings → RushDB**:
-   - **RushDB Cloud**: create a project at [app.rushdb.com](https://app.rushdb.com), create an API key and paste it. Keep the API URL as `https://api.rushdb.com`.
+   - **RushDB Cloud**: create a project at [app.rushdb.com](https://app.rushdb.com), create an API key and add it under **API key**; Obsidian keeps it in its secret storage. Keep the API URL as `https://api.rushdb.com`.
    - **Self-hosted platform**: set the API URL to your own RushDB platform and use one of its API keys.
    - **Standalone engine**: run `rushdb serve --port 3999` and choose **Standalone engine**. Add `--data-dir <path>` to keep the data across restarts.
 3. Under **Folders to index**, list the folders to send (`/` for the whole vault) and any folders to skip. **Nothing is sent until you choose a folder.**
@@ -51,7 +51,7 @@ This plugin uses the network. It is clear about what it sends:
 - **Where**: only to the server you configure: RushDB Cloud, your own RushDB platform or your own engine.
 - **Your data**: on RushDB Cloud it is stored in your project and used to answer your queries. With semantic search on, note text is embedded by the RushDB platform. See the [privacy policy](https://rushdb.com/privacy-policy).
 - **Removal**: **Remove this vault from RushDB** in the settings deletes everything this vault sent.
-- **Credentials**: the API key is stored in this vault's plugin data (`.obsidian/plugins/rushdb/data.json`). Leave that file out of shared or public sync.
+- **Credentials**: the API key and engine token are kept in Obsidian's secret storage, not in the plugin's data file. Keys saved by versions before 0.3 are moved there automatically.
 
 No telemetry, no analytics and no ads. The plugin's source is in this repository, unminified in development builds.
 

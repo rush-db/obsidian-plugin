@@ -3,15 +3,18 @@ import { Notice, Plugin, TFile, debounce, type TAbstractFile } from 'obsidian'
 import { RushDBVault, createDb } from './client'
 import { RELATED_VIEW_TYPE, RelatedView } from './related-view'
 import { SearchModal } from './search-modal'
-import { DEFAULT_SETTINGS, type PluginData, type RushDBSettings, type SyncState } from './settings'
+import { DEFAULT_SETTINGS, type Credentials, type PluginData, type RushDBSettings, type SyncState } from './settings'
 import { RushDBSettingTab } from './settings-tab'
 import { SyncEngine, type VaultSource } from './sync'
 
 const FLUSH_DELAY_MS = 2000
 
+/** Secret ids used when moving credentials that 0.2 and earlier kept in plugin data. */
+const LEGACY_SECRET_IDS = { apiKey: 'rushdb-api-key', engineToken: 'rushdb-engine-token' } as const
+
 /** The settings that decide where notes go and which ones; a change triggers a resync. */
-const syncKey = (s: RushDBSettings) =>
-  JSON.stringify([s.mode, s.apiUrl, s.apiKey, s.engineUrl, s.engineToken, s.engineScope, s.includeFolders, s.excludeFolders, s.embeddings, s.maxBodyChars])
+const syncKey = (s: RushDBSettings, c: Credentials) =>
+  JSON.stringify([s.mode, s.apiUrl, c.apiKey, s.engineUrl, c.engineToken, s.engineScope, s.includeFolders, s.excludeFolders, s.embeddings, s.maxBodyChars])
 
 export default class RushDBPlugin extends Plugin {
   settings: RushDBSettings = { ...DEFAULT_SETTINGS }
@@ -69,7 +72,7 @@ export default class RushDBPlugin extends Plugin {
 
   /** Applies settings changes made in the tab: reconnects and resyncs when they matter. */
   async onSettingsClosed() {
-    if (syncKey(this.settings) !== this.appliedKey) await this.connect()
+    if (syncKey(this.settings, this.credentials()) !== this.appliedKey) await this.connect()
   }
 
   async checkConnection() {
@@ -99,18 +102,22 @@ export default class RushDBPlugin extends Plugin {
     return count
   }
 
-  private isConfigured() {
-    const s = this.settings
-    return s.mode === 'api' ? !!s.apiUrl && !!s.apiKey : !!s.engineUrl
+  /** The API key and engine token, read from Obsidian's secret storage. */
+  private credentials(): Credentials {
+    const read = (id: string) => (id ? (this.app.secretStorage.getSecret(id) ?? '') : '')
+    return { apiKey: read(this.settings.apiKeySecret), engineToken: read(this.settings.engineTokenSecret) }
   }
 
   private async connect() {
-    this.appliedKey = syncKey(this.settings)
+    const credentials = this.credentials()
+    this.appliedKey = syncKey(this.settings, credentials)
     this.vault = null
     this.sync = null
-    if (!this.isConfigured()) return this.setStatus('not connected')
+    const configured =
+      this.settings.mode === 'api' ? !!this.settings.apiUrl && !!credentials.apiKey : !!this.settings.engineUrl
+    if (!configured) return this.setStatus('not connected')
 
-    const vault = new RushDBVault(createDb(this.settings), this.state.vaultId, this.settings)
+    const vault = new RushDBVault(createDb(this.settings, credentials), this.state.vaultId, this.settings)
     this.vault = vault
     this.sync = new SyncEngine(
       this.vaultSource(),
@@ -195,8 +202,7 @@ export default class RushDBPlugin extends Plugin {
     const leaf = existing ?? this.app.workspace.getRightLeaf(false)
     if (!leaf) return
     if (!existing) await leaf.setViewState({ type: RELATED_VIEW_TYPE, active: true })
-    // Not awaited: before Obsidian 1.7.2 it returned nothing.
-    void this.app.workspace.revealLeaf(leaf)
+    await this.app.workspace.revealLeaf(leaf)
   }
 
   private refreshRelatedViews() {
@@ -218,13 +224,26 @@ export default class RushDBPlugin extends Plugin {
   }
 
   private async loadPluginData() {
-    const data = ((await this.loadData()) ?? {}) as Partial<PluginData>
-    this.settings = { ...DEFAULT_SETTINGS, ...data.settings }
+    const data = ((await this.loadData()) ?? {}) as Partial<PluginData> & {
+      settings?: Partial<RushDBSettings> & { apiKey?: string; engineToken?: string }
+    }
+    const { apiKey, engineToken, ...stored } = data.settings ?? {}
+    this.settings = { ...DEFAULT_SETTINGS, ...stored }
     this.state = {
       vaultId: data.state?.vaultId || crypto.randomUUID(),
       notes: data.state?.notes ?? {}
     }
-    if (!data.state?.vaultId) await this.savePluginData()
+    // 0.2 and earlier kept credentials in plugin data: move them to secret storage.
+    this.moveToSecretStorage('apiKeySecret', LEGACY_SECRET_IDS.apiKey, apiKey)
+    this.moveToSecretStorage('engineTokenSecret', LEGACY_SECRET_IDS.engineToken, engineToken)
+    // Saving also drops the plaintext fields from data.json.
+    if (!data.state?.vaultId || apiKey !== undefined || engineToken !== undefined) await this.savePluginData()
+  }
+
+  private moveToSecretStorage(setting: 'apiKeySecret' | 'engineTokenSecret', id: string, value: string | undefined) {
+    if (!value || this.settings[setting]) return
+    if (!this.app.secretStorage.getSecret(id)) this.app.secretStorage.setSecret(id, value)
+    this.settings[setting] = id
   }
 
   private async savePluginData() {

@@ -5,10 +5,12 @@ export interface RushDBSettings {
   mode: ConnectionMode
   /** Platform base URL, without `/api/v1`. */
   apiUrl: string
-  apiKey: string
+  /** Id of the API key in Obsidian's secret storage; the key itself is never in plugin data. */
+  apiKeySecret: string
   /** Standalone engine base URL (direct mode). */
   engineUrl: string
-  engineToken: string
+  /** Id of the engine token in Obsidian's secret storage. */
+  engineTokenSecret: string
   /** Tenant on a multitenant engine; empty for a single-tenant one. */
   engineScope: string
   /** Folders to index, vault-relative. Nothing is indexed until one is chosen; `/` means the whole vault. */
@@ -23,9 +25,9 @@ export interface RushDBSettings {
 export const DEFAULT_SETTINGS: RushDBSettings = {
   mode: 'api',
   apiUrl: 'https://api.rushdb.com',
-  apiKey: '',
+  apiKeySecret: '',
   engineUrl: 'http://127.0.0.1:3999',
-  engineToken: '',
+  engineTokenSecret: '',
   engineScope: '',
   includeFolders: [],
   excludeFolders: [],
@@ -34,6 +36,12 @@ export const DEFAULT_SETTINGS: RushDBSettings = {
 }
 
 /** What the plugin remembers between sessions, next to the settings. */
+/** Credentials resolved from secret storage for the current connection. */
+export interface Credentials {
+  apiKey: string
+  engineToken: string
+}
+
 export interface SyncState {
   /** Identifies this vault's records in a project shared with other vaults. */
   vaultId: string
