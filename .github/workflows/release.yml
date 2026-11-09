@@ -12,6 +12,9 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # Artifact attestations: signed provenance for the release assets.
+  id-token: write
+  attestations: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -61,6 +64,17 @@ jobs:
       - name: Build
         if: steps.ver.outputs.publish == 'true'
         run: pnpm build
+
+      # Lets users verify the assets were built here from this commit:
+      # gh attestation verify main.js --repo rush-db/obsidian-plugin
+      - name: Attest build provenance
+        if: steps.ver.outputs.publish == 'true'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            styles.css
+            manifest.json
 
       - name: Publish the GitHub release
         if: steps.ver.outputs.publish == 'true'

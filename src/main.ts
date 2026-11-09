@@ -195,7 +195,8 @@ export default class RushDBPlugin extends Plugin {
     const leaf = existing ?? this.app.workspace.getRightLeaf(false)
     if (!leaf) return
     if (!existing) await leaf.setViewState({ type: RELATED_VIEW_TYPE, active: true })
-    await this.app.workspace.revealLeaf(leaf)
+    // Not awaited: before Obsidian 1.7.2 it returned nothing.
+    void this.app.workspace.revealLeaf(leaf)
   }
 
   private refreshRelatedViews() {
