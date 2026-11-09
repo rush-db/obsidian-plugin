@@ -1,0 +1,77 @@
+/* Search modal */
+
+.rushdb-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rushdb-hit-title {
+  font-weight: var(--font-semibold);
+}
+
+.rushdb-hit-path,
+.rushdb-hit-excerpt {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.rushdb-hit-excerpt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Related notes view */
+
+.rushdb-related {
+  padding: var(--size-4-2) var(--size-4-3);
+}
+
+.rushdb-related-message,
+.rushdb-related-empty {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.rushdb-related-section + .rushdb-related-section {
+  margin-top: var(--size-4-4);
+}
+
+.rushdb-related-heading {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--size-4-1);
+}
+
+.rushdb-related-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rushdb-related-list li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--size-4-2);
+  padding: var(--size-2-1) 0;
+  min-width: 0;
+}
+
+.rushdb-related-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rushdb-related-folder {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+}

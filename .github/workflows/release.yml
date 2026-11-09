@@ -1,0 +1,75 @@
+name: Release
+
+# Changesets opens the version PR. When a push to main changes the version in
+# manifest.json, this builds the plugin and publishes a GitHub release tagged
+# with that exact version (no `v` prefix), which is what Obsidian installs.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.1.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: changesets/action@v1
+        with:
+          version: pnpm run version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: ver
+        name: Detect a new version
+        run: |
+          set -euo pipefail
+          v=$(node -p "require('./manifest.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/$v" >/dev/null; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
+        if: steps.ver.outputs.publish == 'true'
+        run: pnpm build
+
+      - name: Publish the GitHub release
+        if: steps.ver.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          notes=$(node -e '
+            const fs = require("fs")
+            const v = process.env.VERSION
+            const log = fs.existsSync("CHANGELOG.md") ? fs.readFileSync("CHANGELOG.md", "utf8") : ""
+            const m = log.match(new RegExp("## " + v.replace(/\./g, "\\.") + "\\n([\\s\\S]*?)(?=\\n## |$)"))
+            process.stdout.write(m ? m[1].trim() : "Release " + v)
+          ')
+          gh release create "$VERSION" main.js manifest.json styles.css \
+            --title "$VERSION" --notes "$notes" --target "$GITHUB_SHA"

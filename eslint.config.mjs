@@ -1,0 +1,22 @@
+import { defineConfig, globalIgnores } from 'eslint/config'
+import obsidianmd from 'eslint-plugin-obsidianmd'
+
+export default defineConfig([
+  // Build output and Node build scripts are not plugin code.
+  globalIgnores(['node_modules', 'main.js', 'esbuild.config.mjs', 'version-bump.mjs', 'vitest.config.ts']),
+  ...obsidianmd.configs.recommended,
+  {
+    languageOptions: {
+      parserOptions: {
+        projectService: {
+          allowDefaultProject: ['eslint.config.*']
+        }
+      }
+    }
+  },
+  {
+    // Tests run in Node, not in Obsidian: the integration test calls the engine with fetch.
+    files: ['test/**/*.ts'],
+    rules: { 'no-restricted-globals': 'off' }
+  }
+])

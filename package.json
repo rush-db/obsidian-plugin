@@ -1,0 +1,35 @@
+{
+  "name": "rushdb-obsidian-plugin",
+  "description": "Index an Obsidian vault into RushDB: notes, properties, tags and links, searchable by you and by AI agents.",
+  "private": true,
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@10.1.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "types:check": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "version": "changeset version && node version-bump.mjs"
+  },
+  "dependencies": {
+    "@rushdb/javascript-sdk": "^3.3.2"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.10",
+    "@types/node": "^20.17.23",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.20.0",
+    "eslint-plugin-obsidianmd": "^0.5.1",
+    "obsidian": "^1.14.4",
+    "typescript": "5.7.2",
+    "typescript-eslint": "^8.24.0",
+    "vitest": "^1.6.1"
+  }
+}
