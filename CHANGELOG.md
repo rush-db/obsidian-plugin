@@ -1,5 +1,11 @@
 # rushdb-obsidian-plugin
 
+## 0.3.1
+
+### Patch Changes
+
+- ce0681e: A resync walks only the folders chosen for indexing instead of listing every file in the vault, so paths outside them are never read. Dev tooling no longer pulls in a `minimatch` version with a security advisory.
+
 ## 0.3.0
 
 ### Minor Changes
