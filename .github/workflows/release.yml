@@ -1,8 +1,9 @@
 name: Release
 
-# Changesets opens the version PR. When a push to main changes the version in
-# manifest.json, this builds the plugin and publishes a GitHub release tagged
-# with that exact version (no `v` prefix), which is what Obsidian installs.
+# Changesets opens the version PR. Once it is merged (no changesets pending),
+# a push whose manifest.json version has no tag yet builds the plugin and
+# publishes a GitHub release tagged with that exact version (no `v` prefix),
+# which is what Obsidian installs.
 
 on:
   push:
@@ -35,14 +36,18 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - uses: changesets/action@v1
+      - id: changesets
+        uses: changesets/action@v1
         with:
           version: pnpm run version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # With changesets pending, the action has just versioned this checkout to
+      # open the version PR; nothing is released until that PR is merged.
       - id: ver
         name: Detect a new version
+        if: steps.changesets.outputs.hasChangesets == 'false'
         run: |
           set -euo pipefail
           v=$(node -p "require('./manifest.json').version")
