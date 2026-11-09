@@ -80,3 +80,37 @@ export const parseFolderList = (value: string) =>
     .split(/[\n,]/)
     .map((f) => f.trim())
     .filter((f) => f.length > 0)
+
+/** The parts of Obsidian's TFolder / TFile the folder walk reads. */
+export interface FolderNode {
+  path: string
+  children: Array<{ path: string }>
+}
+export interface FileNode {
+  path: string
+  extension: string
+}
+
+/**
+ * Markdown files under the chosen folders, walking only those folders and not
+ * entering skipped ones, so the rest of the vault is never listed.
+ */
+export const collectIndexedFiles = <F extends FileNode>(
+  settings: Pick<RushDBSettings, 'includeFolders' | 'excludeFolders'>,
+  folderAt: (path: string) => FolderNode | null
+): F[] => {
+  const skipped = new Set(settings.excludeFolders.map(normalizeFolder))
+  const files = new Map<string, F>()
+  const walk = (folder: FolderNode) => {
+    if (skipped.has(folder.path)) return
+    for (const child of folder.children) {
+      if ('children' in child) walk(child as FolderNode)
+      else if ('extension' in child && child.extension === 'md') files.set(child.path, child as F)
+    }
+  }
+  for (const path of settings.includeFolders.map(normalizeFolder)) {
+    const folder = folderAt(path)
+    if (folder) walk(folder)
+  }
+  return [...files.values()]
+}

@@ -47,7 +47,7 @@ The agent then sees your notes as `NOTE` records with `path`, `title`, `folder`,
 
 This plugin uses the network. It is clear about what it sends:
 
-- **What**: for each note in the folders you chose, its path, title, tags, aliases, headings, properties, modification time and text (up to the limit in **Text per note**), plus the links between those notes. Notes outside those folders, attachments and other files are never sent.
+- **What**: for each note in the folders you chose, its path, title, tags, aliases, headings, properties, modification time and text (up to the limit in **Text per note**), plus the links between those notes. Notes outside those folders, attachments and other files are never sent, and the plugin only walks the folders you chose: it does not list the rest of the vault.
 - **Where**: only to the server you configure: RushDB Cloud, your own RushDB platform or your own engine.
 - **Your data**: on RushDB Cloud it is stored in your project and used to answer your queries. With semantic search on, note text is embedded by the RushDB platform. See the [privacy policy](https://rushdb.com/privacy-policy).
 - **Removal**: **Remove this vault from RushDB** in the settings deletes everything this vault sent.

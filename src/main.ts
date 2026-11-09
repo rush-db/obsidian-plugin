@@ -3,7 +3,7 @@ import { Notice, Plugin, TFile, debounce, type TAbstractFile } from 'obsidian'
 import { RushDBVault, createDb } from './client'
 import { RELATED_VIEW_TYPE, RelatedView } from './related-view'
 import { SearchModal } from './search-modal'
-import { DEFAULT_SETTINGS, type Credentials, type PluginData, type RushDBSettings, type SyncState } from './settings'
+import { DEFAULT_SETTINGS, collectIndexedFiles, type Credentials, type PluginData, type RushDBSettings, type SyncState } from './settings'
 import { RushDBSettingTab } from './settings-tab'
 import { SyncEngine, type VaultSource } from './sync'
 
@@ -179,7 +179,7 @@ export default class RushDBPlugin extends Plugin {
       return file instanceof TFile ? file : null
     }
     return {
-      markdownFiles: () => vault.getMarkdownFiles().map((f) => ({ path: f.path, basename: f.basename, mtime: f.stat.mtime })),
+      indexedFiles: () => this.indexedFiles().map((f) => ({ path: f.path, basename: f.basename, mtime: f.stat.mtime })),
       file: (path) => {
         const f = fileAt(path)
         return f ? { path: f.path, basename: f.basename, mtime: f.stat.mtime } : null
@@ -195,6 +195,11 @@ export default class RushDBPlugin extends Plugin {
       },
       resolvedLinks: () => metadataCache.resolvedLinks
     }
+  }
+
+  private indexedFiles(): TFile[] {
+    const { vault } = this.app
+    return collectIndexedFiles<TFile>(this.settings, (path) => (path === '' ? vault.getRoot() : vault.getFolderByPath(path)))
   }
 
   private async openRelated() {

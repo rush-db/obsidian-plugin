@@ -84,7 +84,7 @@ class FakeStore implements Store {
 class FakeVault implements VaultSource {
   files = new Map<string, string>()
 
-  markdownFiles() {
+  indexedFiles() {
     return [...this.files.keys()].map((path) => this.file(path)!)
   }
   file(path: string) {

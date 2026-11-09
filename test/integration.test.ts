@@ -53,7 +53,7 @@ type Files = Map<string, { text: string; tags: string[] }>
 
 const vaultSourceOf = (files: Files): VaultSource => {
   const source: VaultSource = {
-    markdownFiles: () => [...files.keys()].map((path) => source.file(path)!),
+    indexedFiles: () => [...files.keys()].map((path) => source.file(path)!),
     file: (path) =>
       files.has(path) ? { path, basename: path.replace(/^.*\//, '').replace(/\.md$/, ''), mtime: Date.UTC(2026, 10, 1) } : null,
     read: async (path) => files.get(path)?.text ?? '',

@@ -10,7 +10,7 @@ import {
   type NoteInput
 } from '../src/parse'
 import { toRecordId } from '../src/client'
-import { isIncluded } from '../src/settings'
+import { collectIndexedFiles, isIncluded, type FolderNode } from '../src/settings'
 
 const input = (overrides: Partial<NoteInput> = {}): NoteInput => ({
   vaultId: 'v1',
@@ -109,6 +109,31 @@ describe('helpers', () => {
   it('formats selected record ids as UUIDs', () => {
     expect(toRecordId('01a1c1619e1677f289682923b9227bf0')).toBe('01a1c161-9e16-77f2-8968-2923b9227bf0')
     expect(toRecordId('01a1c161-9e16-77f2-8968-2923b9227bf0')).toBe('01a1c161-9e16-77f2-8968-2923b9227bf0')
+  })
+
+  it('walks only the chosen folders, skipping excluded ones', () => {
+    const file = (path: string) => ({ path, extension: path.split('.').pop() ?? '' })
+    const folder = (path: string, children: FolderNode['children']): FolderNode => ({ path, children })
+    const tree = folder('', [
+      file('top.md'),
+      folder('work', [file('work/a.md'), file('work/img.png'), folder('work/private', [file('work/private/s.md')])]),
+      folder('journal', [file('journal/day.md')])
+    ])
+    const byPath = new Map<string, FolderNode>()
+    const index = (f: FolderNode) => {
+      byPath.set(f.path, f)
+      for (const c of f.children) if ('children' in c) index(c as FolderNode)
+    }
+    index(tree)
+    const paths = (include: string[], exclude: string[] = []) =>
+      collectIndexedFiles({ includeFolders: include, excludeFolders: exclude }, (p) => byPath.get(p) ?? null)
+        .map((f) => f.path)
+        .sort()
+
+    expect(paths(['work'], ['work/private/'])).toEqual(['work/a.md'])
+    expect(paths(['/', 'work'], ['journal'])).toEqual(['top.md', 'work/a.md', 'work/private/s.md'])
+    expect(paths(['missing'])).toEqual([])
+    expect(paths([])).toEqual([])
   })
 })
 

@@ -23,7 +23,8 @@ export interface Store {
 
 /** The vault operations sync needs; `main.ts` implements it over Obsidian's API. */
 export interface VaultSource {
-  markdownFiles: () => Array<{ path: string; basename: string; mtime: number }>
+  /** Markdown files in the folders chosen for indexing; nothing outside them is listed. */
+  indexedFiles: () => Array<{ path: string; basename: string; mtime: number }>
   file: (path: string) => { path: string; basename: string; mtime: number } | null
   read: (path: string) => Promise<string>
   metadata: (path: string) => NoteMetadata | null
@@ -175,7 +176,7 @@ export class SyncEngine {
   async reconcile() {
     await this.serialize(async () => {
       const remote = await withRetry(() => this.store.listNotes(this.state.vaultId))
-      const local = new Set(this.vault.markdownFiles().map((f) => f.path).filter(this.isIndexed))
+      const local = new Set(this.vault.indexedFiles().map((f) => f.path).filter(this.isIndexed))
 
       const stale = remote.filter((r) => !local.has(r.path))
       if (stale.length) {
