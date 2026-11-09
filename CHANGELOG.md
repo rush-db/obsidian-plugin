@@ -1,5 +1,11 @@
 # rushdb-obsidian-plugin
 
+## 0.2.1
+
+### Patch Changes
+
+- 2e50eb9: Fix the directory review: opening the related-notes view no longer relies on an API newer than the declared minimum Obsidian version (1.5.0). Releases now carry GitHub artifact attestations for `main.js`, `styles.css` and `manifest.json`, and the test toolchain is updated past its security advisories.
+
 ## 0.2.0
 
 ### Minor Changes
