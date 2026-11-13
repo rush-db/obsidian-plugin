@@ -13,7 +13,7 @@ export interface RushDBSettings {
   engineTokenSecret: string
   /** Tenant on a multitenant engine; empty for a single-tenant one. */
   engineScope: string
-  /** Folders to index, vault-relative. Nothing is indexed until one is chosen; `/` means the whole vault. */
+  /** Folders to index, vault-relative; `/` (the default) is the whole vault. Nothing is sent before a key is set. */
   includeFolders: string[]
   excludeFolders: string[]
   /** Managed embeddings for semantic search (RushDB Cloud or a platform with an embedding model). */
@@ -25,11 +25,11 @@ export interface RushDBSettings {
 export const DEFAULT_SETTINGS: RushDBSettings = {
   mode: 'api',
   apiUrl: 'https://api.rushdb.com',
-  apiKeySecret: '',
+  apiKeySecret: 'rushdb-api-default',
   engineUrl: 'http://127.0.0.1:3999',
-  engineTokenSecret: '',
+  engineTokenSecret: 'rushdb-engine-default',
   engineScope: '',
-  includeFolders: [],
+  includeFolders: ['/'],
   excludeFolders: [],
   embeddings: false,
   maxBodyChars: 32_000

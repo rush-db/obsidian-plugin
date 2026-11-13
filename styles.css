@@ -75,3 +75,55 @@
   white-space: nowrap;
   flex-shrink: 1;
 }
+
+.rushdb-related-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+}
+
+.rushdb-related-refresh {
+  margin-left: auto;
+  padding: var(--size-2-1);
+  color: var(--text-faint);
+}
+
+.rushdb-related-refresh svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+
+.rushdb-related-refresh.is-loading svg {
+  animation: rushdb-spin 0.8s linear infinite;
+}
+
+@keyframes rushdb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rushdb-related-refresh.is-loading svg {
+    animation: none;
+  }
+
+  .rushdb-related-refresh.is-loading {
+    opacity: 0.5;
+  }
+}
+
+/* Similarity score or shared-tag count: a quiet pill at the end of the row. */
+.rushdb-related-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+  align-self: center;
+  padding: 0 var(--size-4-1);
+  border: var(--border-width) solid var(--background-modifier-border);
+  border-radius: var(--radius-l);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  cursor: default;
+}

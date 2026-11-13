@@ -13,10 +13,10 @@ Your Markdown files stay the source of truth. The plugin only ever writes to Rus
 
 1. Install **RushDB** from **Settings → Community plugins → Browse**, then enable it. It needs Obsidian 1.13 or later.
 2. Choose where your notes go, in **Settings → RushDB**:
-   - **RushDB Cloud**: create a project at [app.rushdb.com](https://app.rushdb.com), create an API key and add it under **API key**; Obsidian keeps it in its secret storage. Keep the API URL as `https://api.rushdb.com`.
+   - **RushDB Cloud**: create a project at [app.rushdb.com](https://app.rushdb.com), create an API key and paste it under **API key**; Obsidian keeps it in its secret storage (as `rushdb-api-default` unless you pick another secret). Keep the API URL as `https://api.rushdb.com`.
    - **Self-hosted platform**: set the API URL to your own RushDB platform and use one of its API keys.
    - **Standalone engine**: run `rushdb serve --port 3999` and choose **Standalone engine**. Add `--data-dir <path>` to keep the data across restarts.
-3. Under **Folders to index**, list the folders to send (`/` for the whole vault) and any folders to skip. **Nothing is sent until you choose a folder.**
+3. **Folders to index** starts as `/`, the whole vault. Narrow it to the folders to send, and list any folders to skip. **Nothing is sent until RushDB is connected.**
 4. Close the settings. The first sync starts, and the status bar shows its progress.
 
 Open the search with the **RushDB: Search notes** command and the sidebar with **RushDB: Show related notes**.

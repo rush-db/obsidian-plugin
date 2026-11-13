@@ -90,7 +90,7 @@ export class RushDBSettingTab extends PluginSettingTab {
         items: [
           {
             name: 'Folders to index',
-            desc: 'One per line; / for the whole vault. Notes are sent to the server above only from these folders, and nothing is sent until you choose one. Changes apply when you close the settings.',
+            desc: 'One per line; / (the default) is the whole vault. Notes are sent to the server above only from these folders, and only once RushDB is connected above. Changes apply when you close the settings.',
             aliases: ['privacy', 'include'],
             control: { type: 'textarea', key: 'includeFolders', placeholder: '/', rows: 4 }
           },

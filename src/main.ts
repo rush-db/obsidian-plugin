@@ -1,6 +1,7 @@
-import { Notice, Plugin, TFile, debounce, type TAbstractFile } from 'obsidian'
+import { Notice, Plugin, TFile, addIcon, debounce, type TAbstractFile } from 'obsidian'
 
 import { RushDBVault, createDb } from './client'
+import { RUSHDB_ICON, RUSHDB_ICON_SVG } from './icon'
 import { RELATED_VIEW_TYPE, RelatedView } from './related-view'
 import { SearchModal } from './search-modal'
 import { DEFAULT_SETTINGS, collectIndexedFiles, type Credentials, type PluginData, type RushDBSettings, type SyncState } from './settings'
@@ -30,6 +31,7 @@ export default class RushDBPlugin extends Plugin {
     this.addSettingTab(new RushDBSettingTab(this.app, this))
     this.statusEl = this.addStatusBarItem()
 
+    addIcon(RUSHDB_ICON, RUSHDB_ICON_SVG)
     this.registerView(
       RELATED_VIEW_TYPE,
       (leaf) => new RelatedView(leaf, () => this.vault, (path) => this.sync?.isIndexed(path) ?? false)
@@ -232,8 +234,16 @@ export default class RushDBPlugin extends Plugin {
     const data = ((await this.loadData()) ?? {}) as Partial<PluginData> & {
       settings?: Partial<RushDBSettings> & { apiKey?: string; engineToken?: string }
     }
-    const { apiKey, engineToken, ...stored } = data.settings ?? {}
-    this.settings = { ...DEFAULT_SETTINGS, ...stored }
+    const saved: Partial<RushDBSettings> & { apiKey?: string; engineToken?: string } = data.settings ?? {}
+    const { apiKey, engineToken, ...stored } = saved
+    // Secret ids start empty here so the 0.2 migration below can claim them; unset ones then get the default.
+    // A saved folder list is kept as it is, even an empty one: only a new install starts with the whole vault.
+    this.settings = {
+      ...DEFAULT_SETTINGS,
+      ...stored,
+      apiKeySecret: stored.apiKeySecret ?? '',
+      engineTokenSecret: stored.engineTokenSecret ?? ''
+    }
     this.state = {
       vaultId: data.state?.vaultId || crypto.randomUUID(),
       notes: data.state?.notes ?? {}
@@ -241,6 +251,8 @@ export default class RushDBPlugin extends Plugin {
     // 0.2 and earlier kept credentials in plugin data: move them to secret storage.
     this.moveToSecretStorage('apiKeySecret', LEGACY_SECRET_IDS.apiKey, apiKey)
     this.moveToSecretStorage('engineTokenSecret', LEGACY_SECRET_IDS.engineToken, engineToken)
+    this.settings.apiKeySecret ||= DEFAULT_SETTINGS.apiKeySecret
+    this.settings.engineTokenSecret ||= DEFAULT_SETTINGS.engineTokenSecret
     // Saving also drops the plaintext fields from data.json.
     if (!data.state?.vaultId || apiKey !== undefined || engineToken !== undefined) await this.savePluginData()
   }

@@ -1,6 +1,8 @@
-import { ItemView, TFile, WorkspaceLeaf, debounce, getAllTags } from 'obsidian'
+import { ItemView, TFile, WorkspaceLeaf, debounce, getAllTags, setIcon, setTooltip } from 'obsidian'
 
 import type { NoteHit, RelatedNotes, RushDBVault } from './client'
+import { formatScore } from './format'
+import { RUSHDB_ICON } from './icon'
 
 export const RELATED_VIEW_TYPE = 'rushdb-related'
 
@@ -34,7 +36,7 @@ export class RelatedView extends ItemView {
   }
 
   getIcon() {
-    return 'network'
+    return RUSHDB_ICON
   }
 
   async onOpen() {
@@ -69,7 +71,7 @@ export class RelatedView extends ItemView {
       const related = await vault.related(await this.describe(file))
       if (generation !== this.generation) return
       container.empty()
-      for (const section of SECTIONS) this.renderSection(section.title, related[section.key], section.empty)
+      for (const section of SECTIONS) this.renderSection(section, file, related[section.key])
     } catch (error) {
       if (generation !== this.generation) return
       container.empty()
@@ -93,14 +95,58 @@ export class RelatedView extends ItemView {
     this.contentEl.createDiv({ cls: 'rushdb-related-message', text })
   }
 
-  private renderSection(title: string, hits: NoteHit[], empty: string) {
-    const section = this.contentEl.createDiv({ cls: 'rushdb-related-section' })
-    section.createDiv({ cls: 'rushdb-related-heading', text: `${title} (${hits.length})` })
+  private renderSection(section: (typeof SECTIONS)[number], file: TFile, hits: NoteHit[]) {
+    const el = this.contentEl.createDiv({ cls: 'rushdb-related-section' })
+    const heading = el.createDiv({ cls: 'rushdb-related-heading' })
+    const title = heading.createSpan()
+    const refresh = heading.createDiv({ cls: 'clickable-icon rushdb-related-refresh' })
+    setIcon(refresh, 'refresh-cw')
+    setTooltip(refresh, `Refresh ${section.title.toLowerCase()}`)
+    refresh.setAttr('aria-label', `Refresh ${section.title.toLowerCase()}`)
+    refresh.setAttr('role', 'button')
+    refresh.setAttr('tabindex', '0')
+    const body = el.createDiv()
+
+    const show = (list: NoteHit[]) => {
+      title.setText(`${section.title} (${list.length})`)
+      body.empty()
+      this.renderHits(body, section, list)
+    }
+    const reload = async () => {
+      const vault = this.getVault()
+      if (!vault || refresh.hasClass('is-loading')) return
+      const generation = this.generation
+      refresh.addClass('is-loading')
+      try {
+        const list = await vault.relatedSection(section.key, await this.describe(file))
+        if (generation === this.generation) show(list)
+      } catch (error) {
+        if (generation !== this.generation) return
+        body.empty()
+        body.createDiv({
+          cls: 'rushdb-related-empty',
+          text: `Could not load: ${error instanceof Error ? error.message : String(error)}`
+        })
+      } finally {
+        refresh.removeClass('is-loading')
+      }
+    }
+    refresh.addEventListener('click', () => void reload())
+    refresh.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        void reload()
+      }
+    })
+    show(hits)
+  }
+
+  private renderHits(body: HTMLElement, { key, empty }: (typeof SECTIONS)[number], hits: NoteHit[]) {
     if (!hits.length) {
-      section.createDiv({ cls: 'rushdb-related-empty', text: empty })
+      body.createDiv({ cls: 'rushdb-related-empty', text: empty })
       return
     }
-    const list = section.createEl('ul', { cls: 'rushdb-related-list' })
+    const list = body.createEl('ul', { cls: 'rushdb-related-list' })
     for (const hit of hits) {
       const item = list.createEl('li')
       const link = item.createEl('a', { cls: 'rushdb-related-link', text: hit.title, href: '#' })
@@ -109,6 +155,14 @@ export class RelatedView extends ItemView {
         void this.app.workspace.openLinkText(hit.path, '', event.metaKey || event.ctrlKey)
       })
       if (hit.folder) item.createSpan({ cls: 'rushdb-related-folder', text: hit.folder })
+      if (key === 'similar' && hit.score !== undefined) {
+        const badge = item.createSpan({ cls: 'rushdb-related-badge', text: formatScore(hit.score) })
+        setTooltip(badge, 'Similarity to this note')
+      }
+      if (key === 'sharedTags' && hit.matchedTags?.length) {
+        const badge = item.createSpan({ cls: 'rushdb-related-badge', text: `×${hit.matchedTags.length}` })
+        setTooltip(badge, hit.matchedTags.map((tag) => `#${tag}`).join('\n'))
+      }
     }
   }
 }
